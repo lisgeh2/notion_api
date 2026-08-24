@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install requests icalendar recurring-ical-events
+      - run: pip install requests icalendar recurring-ical-events python-dotenv
 
       - run: python show_calendar.py
         env:
