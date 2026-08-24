@@ -134,7 +134,43 @@ def add_hangout(table, friend_id, title, when):
     }
     response = requests.post(f"{API}/pages", headers=HEADERS, json=body)
     response.raise_for_status()
+    
+    
+FRIEND_INTERVAL = "Time Intervall"   # number column on Friend DB
+FRIEND_LAST = "last contacted"       # rollup column on Friend DB
+FRIEND_NEXT = "Next contact"         # the new date column
 
+
+def get_friend_rows(table):
+    """Fetch full rows, not just names, so we can read the rollup."""
+    response = requests.post(f"{API}/data_sources/{table}/query", headers=HEADERS, json={})
+    response.raise_for_status()
+    return response.json()["results"]
+
+
+def set_next_contact(table):
+    """Write last-contacted + interval into the Next contact date column."""
+    for row in get_friend_rows(table):
+        props = row["properties"]
+
+        rollup = props[FRIEND_LAST].get("rollup", {}).get("date")
+        interval = props[FRIEND_INTERVAL].get("number")
+
+        if not rollup or not rollup.get("start") or not interval:
+            continue
+
+        last = date.fromisoformat(rollup["start"][:10])
+        due = (last + timedelta(days=interval)).isoformat()
+
+        if (props.get(FRIEND_NEXT, {}).get("date") or {}).get("start") == due:
+            continue   # already correct, skip the write
+
+        body = {"properties": {FRIEND_NEXT: {"date": {"start": due}}}}
+        response = requests.patch(f"{API}/pages/{row['id']}", headers=HEADERS, json=body)
+        response.raise_for_status()
+
+        name = props[FRIEND_NAME]["title"][0]["plain_text"]
+        print(f"  {name:12} next contact {due}")
 
 def main():
     friends_table = get_table(FRIENDS_DB)
@@ -172,6 +208,9 @@ def main():
                 add_hangout(hangouts_table, friend_id, str(title), iso)
                 print(f"  {when:20} {title}  -> added")
     print()
+    
+    print("\nUpdating next contact dates\n")
+    set_next_contact(friends_table)
 
 
 if __name__ == "__main__":
