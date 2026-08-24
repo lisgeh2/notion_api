@@ -28,7 +28,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ICS_URL = os.environ[]
 ICS_URL = os.environ["ICS_URL"]
 
 def get_friends(table):
