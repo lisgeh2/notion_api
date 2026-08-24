@@ -18,13 +18,18 @@ import recurring_ical_events
 import requests
 import re
 
-ICS_URL = """https://calendar.google.com/calendar/ical/lisa.gehrig2002%40gmail.com/private-25eae5269a4776b08d751cf4b0096aca/basic.ics"""
 DAYS_AHEAD = 7
 DAYS_BACK = 93
 
 import unicodedata
 
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
+
+ICS_URL = os.environ[]
+ICS_URL = os.environ["ICS_URL"]
 
 def get_friends(table):
     """Fetch every name from Friend DB's title column."""

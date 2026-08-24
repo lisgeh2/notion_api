@@ -1,0 +1,24 @@
+name: hangout sync
+
+on:
+  schedule:
+    - cron: "0 5 * * *"     # 07:00 CEST
+    - cron: "0 16 * * *"    # 18:00 CEST
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests icalendar recurring-ical-events
+
+      - run: python show_calendar.py
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          ICS_URL: ${{ secrets.ICS_URL }}
