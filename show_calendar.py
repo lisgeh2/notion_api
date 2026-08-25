@@ -29,6 +29,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 ICS_URL = os.environ["ICS_URL"]
+ICS_URL_TODO = os.environ["ICS_URL_TODO"]
 
 def get_friends(table):
     """Fetch every name from Friend DB's title column."""
@@ -63,16 +64,22 @@ def as_date(value):
     return value.date() if hasattr(value, "hour") else value
 
 def get_events(days_back=DAYS_BACK, days_ahead=DAYS_AHEAD):
-    ics = requests.get(ICS_URL).text
-    calendar = icalendar.Calendar.from_ical(ics)
 
-    today = date.today()
-    start, end = today - timedelta(days=days_back), today + timedelta(days=days_ahead)
+    events_full = []
+    
+    for ics_url in [ICS_URL, ICS_URL_TODO]:
+        ics = requests.get(ics_url).text
+        calendar = icalendar.Calendar.from_ical(ics)
 
-    events = recurring_ical_events.of(calendar).between(start, end)
-    events = [e for e in events if start <= as_date(e["DTSTART"].dt) <= end]
+        today = date.today()
+        start, end = today - timedelta(days=days_back), today + timedelta(days=days_ahead)
 
-    return sorted(events, key=lambda e: as_date(e["DTSTART"].dt))
+        events = recurring_ical_events.of(calendar).between(start, end)
+        events = [e for e in events if start <= as_date(e["DTSTART"].dt) <= end]
+        
+        events_full.extend(events)
+
+    return sorted(events_full, key=lambda e: as_date(e["DTSTART"].dt))
 
 
 
