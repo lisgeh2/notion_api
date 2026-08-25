@@ -3,7 +3,10 @@ name: hangout sync
 on:
   schedule:
     - cron: "0 5 * * *"     # 07:00 CEST
-    - cron: "0 16 * * *"    # 18:00 CEST
+    - cron: "0 10 * * *"
+    - cron: "0 16 * * *"
+    - cron: "0 19 * * *"
+
   workflow_dispatch:
 
 jobs:
@@ -22,3 +25,4 @@ jobs:
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           ICS_URL: ${{ secrets.ICS_URL }}
+          ICS_URL_TODO: ${{ secrets.ICS_URL_TODO }}
