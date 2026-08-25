@@ -1,0 +1,25 @@
+[Unit]
+Description=Morning score dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=morningscore
+Group=morningscore
+WorkingDirectory=/opt/morningscore
+Environment=HOME=/var/lib/morningscore
+Environment=SCORE_DB=/var/lib/morningscore/morningscore.db
+Environment=SCORE_TZ=Europe/Zurich
+ExecStart=/opt/morningscore/venv/bin/streamlit run /opt/morningscore/dashboard.py --server.port 8555 --server.address 127.0.0.1 --server.headless true --server.baseUrlPath phone-scores --browser.gatherUsageStats false --server.enableXsrfProtection false --server.enableCORS false
+Restart=always
+RestartSec=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/morningscore
+
+[Install]
+WantedBy=multi-user.target

@@ -11,9 +11,7 @@ WorkingDirectory=/opt/morningscore
 Environment=SCORE_DB=/var/lib/morningscore/morningscore.db
 Environment=SCORE_HOST=127.0.0.1
 Environment=SCORE_PORT=8080
-# Set this to your timezone, otherwise 08:00 means 08:00 UTC.
 Environment=SCORE_TZ=Europe/Zurich
-# Token lives here (chmod 600). Unit files are world-readable.
 EnvironmentFile=/etc/morningscore.env
 ExecStart=/opt/morningscore/venv/bin/python /opt/morningscore/server.py
 Restart=always
