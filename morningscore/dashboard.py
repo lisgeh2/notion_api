@@ -5,24 +5,18 @@ import os
 import sqlite3
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
+from colors import INK, PAPER, MUTED, FILLED, EMPTY, GRADIENT
+from config import WINDOW_START, WINDOW_END, SLOT_MINUTES, MAX_SCORE
 
 import pandas as pd
 import streamlit as st
 
 # Same rules as server.py. If you change them there, change them here.
-WINDOW_START = time(8, 0)
-WINDOW_END = time(13, 0)
-SLOT_MINUTES = 5
-MAX_SCORE = 60
+
 
 DB_PATH = os.environ.get("SCORE_DB", "/var/lib/morningscore/morningscore.db")
 TZ = ZoneInfo(os.environ.get("SCORE_TZ", "Europe/Zurich"))
 
-INK = "#1c1f26"
-PAPER = "#f7f5f0"
-MUTED = "#8a8578"
-FILLED = "#2f6b5f"
-EMPTY = "#dedbd2"
 
 
 def read_db():
@@ -94,7 +88,7 @@ def slot_grid(score):
     """Sixty blocks, one per five minutes of the morning. Filled = survived."""
     blocks = []
     for index in range(MAX_SCORE):
-        colour = FILLED if index < score else EMPTY
+        colour = GRADIENT[score] if index < score else EMPTY
         hour = 8 + (index * SLOT_MINUTES) // 60
         minute = (index * SLOT_MINUTES) % 60
         blocks.append(
@@ -113,12 +107,28 @@ st.markdown(f"""
     .block-container {{ padding-top: 2.5rem; max-width: 720px; }}
     h1, h2, h3, p, span, div {{ color: {INK}; }}
     .grid {{
-        display: grid;
-        grid-template-columns: repeat(20, 1fr);
-        gap: 4px;
+        display: flex;
         margin: 0.5rem 0 1.5rem 0;
     }}
-    .slot {{ aspect-ratio: 1; border-radius: 2px; }}
+    .grid {{
+        display: flex;
+        width: 100%;
+        max-width: 480px;
+        margin: 0.5rem 0 1.5rem 0;
+    }}
+
+    .grid > * {{
+        flex: 1 1 0;
+        min-width: 0;          /* lets blocks shrink below intrinsic size */
+        height: 40px;
+        border-right: 2px solid {PAPER};
+    }}
+
+    .grid > *:last-child {{
+        border-right: none;
+    }}
+
+    .slot {{ border-radius: 2px; }}   /* aspect-ratio removed */
     .headline {{
         font-size: 4.5rem; font-weight: 700; line-height: 1;
         letter-spacing: -0.03em; margin-bottom: 0.2rem;
