@@ -238,9 +238,9 @@ evening_score, evening_state = live_evening_score(days)
 
 st.markdown('<div class="label">This evening</div>', unsafe_allow_html=True)
 st.markdown(
-    f'<div class="headline">{make_36to60(fmt_score(evening_score))}'
+    f'<div class="headline">{fmt_score(make_36to60(evening_score))}'
     f'<span style="color:{MUTED};font-size:1.5rem">'
-    f' / {make_36to60(fmt_score(EVENING_MAX_SCORE))}</span></div>',
+    f' / {fmt_score(make_36to60(EVENING_MAX_SCORE))}</span></div>',
     unsafe_allow_html=True,
 )
 st.markdown(f'<div class="sub">{evening_state}</div>', unsafe_allow_html=True)
@@ -257,8 +257,8 @@ if evenings_done:
     average = sum(entry["evening_score"] for entry in evenings_done) / len(evenings_done)
     best = max(entry["evening_score"] for entry in evenings_done)
     left, middle, right = st.columns(3)
-    left.metric("Average", make_36to60(fmt_score(average)))
-    middle.metric("Best", make_36to60(fmt_score(best)))
+    left.metric("Average", fmt_score(make_36to60(average)))
+    middle.metric("Best", fmt_score(make_36to60(best)))
     right.metric("Streak over 2.7", evening_streak(evenings_done, 27))
 
     st.markdown('<div class="label">Last 30 evenings</div>', unsafe_allow_html=True)
