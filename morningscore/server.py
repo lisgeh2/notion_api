@@ -7,13 +7,12 @@ import sqlite3
 import sys
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
+from config import (WINDOW_START, WINDOW_END, SLOT_MINUTES, MAX_SCORE,
+                    EVENING_WINDOW_START, EVENING_WINDOW_END,
+                    EVENING_SLOT_MINUTES, EVENING_MAX_SCORE)
 
 from flask import Flask, g, jsonify, request
 
-WINDOW_START = time(8, 0)
-WINDOW_END = time(13, 0)
-SLOT_MINUTES = 5
-MAX_SCORE = 60
 
 TOKEN = os.environ.get("SCORE_TOKEN", "")
 DB_PATH = os.environ.get("SCORE_DB", "morningscore.db")
@@ -35,6 +34,26 @@ def window_start_on(day):
 def window_end_on(day):
     return datetime.combine(day, WINDOW_END, tzinfo=TZ)
 
+def evening_start_on(day):
+    return datetime.combine(day, EVENING_WINDOW_START, tzinfo=TZ)
+
+
+def evening_end_on(day):
+    # window crosses midnight -> the end belongs to the following day
+    extra = 1 if EVENING_WINDOW_END <= EVENING_WINDOW_START else 0
+    return datetime.combine(day + timedelta(days=extra), EVENING_WINDOW_END, tzinfo=TZ)
+
+
+def evening_day_for(moment):
+    """A ping at 00:30 belongs to yesterday's evening."""
+    day = moment.date()
+    return day if evening_start_on(day) <= moment else day - timedelta(days=1)
+
+
+def in_evening_window(moment):
+    day = evening_day_for(moment)
+    return evening_start_on(day) <= moment < evening_end_on(day)
+
 
 def score_for(first_ping, day):
     if first_ping is None:
@@ -42,6 +61,11 @@ def score_for(first_ping, day):
     minutes_survived = (first_ping - window_start_on(day)).total_seconds() / 60
     return max(0, min(int(minutes_survived // SLOT_MINUTES), MAX_SCORE))
 
+def evening_score_for(last_ping, day):
+    if last_ping is None:
+        return EVENING_MAX_SCORE
+    minutes_early = (evening_end_on(day) - last_ping).total_seconds() / 60
+    return max(0, min(int(minutes_early // EVENING_SLOT_MINUTES), EVENING_MAX_SCORE))
 
 def in_window(moment):
     return window_start_on(moment.date()) <= moment < window_end_on(moment.date())
@@ -69,6 +93,9 @@ def init_db():
         conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
         conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('start_day', ?)",
                      (datetime.now(TZ).date().isoformat(),))
+        conn.execute("""CREATE TABLE IF NOT EXISTS evenings (
+                    day       TEXT PRIMARY KEY,
+                    last_ping TEXT NOT NULL)""")
 
 
 def start_day():
@@ -90,6 +117,19 @@ def load_first_ping(day):
                        (day.isoformat(),)).fetchone()
     return datetime.fromisoformat(row["first_ping"]) if row else None
 
+def save_last_ping(moment, day):
+    db().execute(
+        """INSERT INTO evenings (day, last_ping) VALUES (?, ?)
+           ON CONFLICT(day) DO UPDATE SET last_ping = excluded.last_ping""",
+        (day.isoformat(), moment.isoformat()),
+    )
+    db().commit()
+
+def load_last_ping(day):
+    row = db().execute("SELECT last_ping FROM evenings WHERE day = ?",
+                       (day.isoformat(),)).fetchone()
+    return datetime.fromisoformat(row["last_ping"]) if row else None
+
 
 def authorized():
     supplied = request.args.get("token") or request.headers.get("X-Token", "")
@@ -101,12 +141,25 @@ def ping():
     if not authorized():
         return jsonify(error="forbidden"), 403
     moment = now()
-    if not in_window(moment):
-        return jsonify(recorded=False, reason="outside scoring window"), 200
-    was_first = save_first_ping(moment)
-    return jsonify(recorded=was_first,
-                   score=score_for(load_first_ping(moment.date()), moment.date())), 200
 
+    if in_window(moment):
+        day = moment.date()
+        was_first = save_first_ping(moment)
+        return jsonify(window="morning", recorded=was_first,
+                       score=score_for(load_first_ping(day), day)), 200
+
+    if in_evening_window(moment):
+        day = evening_day_for(moment)
+        save_last_ping(moment, day)
+        return jsonify(window="evening", recorded=True,
+                       score=evening_score_for(moment, day)), 200
+
+    return jsonify(recorded=False, reason="outside scoring window"), 200
+
+def current_evening_day(moment):
+    """The evening in progress, or tonight's if it hasn't started."""
+    day = evening_day_for(moment)
+    return day if moment < evening_end_on(day) else moment.date()
 
 @app.get("/today")
 def today():
@@ -114,6 +167,9 @@ def today():
         return jsonify(error="forbidden"), 403
     moment = now()
     day = moment.date()
+    
+    # Morning
+    
     first_ping = load_first_ping(day)
 
     if first_ping is not None:
@@ -126,6 +182,22 @@ def today():
         state, final = "still going, phone still off", False
 
     reference = first_ping if first_ping else min(moment, window_end_on(day))
+    
+    
+    #### evening
+    
+    evening_day = current_evening_day(moment)
+    last_ping = load_last_ping(evening_day)
+
+    if moment < evening_start_on(evening_day):
+        e_state, e_final = "evening has not started yet", False
+    elif moment < evening_end_on(evening_day):
+        e_state = "phone still off" if last_ping is None else "phone was on"
+        e_final = False
+    else:
+        e_state = "perfect evening, no ping at all" if last_ping is None else "phone was on"
+        e_final = True
+
     return jsonify(
         day=day.isoformat(),
         score=score_for(first_ping, day) if first_ping else score_for(reference, day),
@@ -133,6 +205,14 @@ def today():
         first_ping=first_ping.strftime("%H:%M") if first_ping else None,
         state=state,
         final=final,
+        evening={
+            "day": evening_day.isoformat(),
+            "score": evening_score_for(last_ping, evening_day),
+            "max_score": EVENING_MAX_SCORE,
+            "last_ping": last_ping.strftime("%H:%M") if last_ping else None,
+            "state": e_state,
+            "final": e_final,
+        },
     ), 200
 
 
@@ -150,14 +230,18 @@ def scores():
         if day < first_tracked_day:
             break
         first_ping = load_first_ping(day)
+        last_ping = load_last_ping(day)
         results.append({"day": day.isoformat(),
                         "score": score_for(first_ping, day),
-                        "first_ping": first_ping.strftime("%H:%M") if first_ping else None})
-
+                        "first_ping": first_ping.strftime("%H:%M") if first_ping else None,
+                        "evening_score": evening_score_for(last_ping, day),
+                        "last_ping": last_ping.strftime("%H:%M") if last_ping else None})
     finished = [r for r in results if r["day"] != today_date.isoformat()]
     average = round(sum(r["score"] for r in finished) / len(finished), 1) if finished else None
-    return jsonify(days=results, average=average, max_score=MAX_SCORE), 200
-
+    evening_average = (round(sum(r["evening_score"] for r in finished) / len(finished), 1)
+                       if finished else None)
+    return jsonify(days=results, average=average, evening_average=evening_average,
+                   max_score=MAX_SCORE, evening_max_score=EVENING_MAX_SCORE), 200
 
 @app.get("/healthz")
 def healthz():
