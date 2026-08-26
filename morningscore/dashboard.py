@@ -169,6 +169,11 @@ st.markdown(f"""
         color: {MUTED}; font-size: 0.75rem; text-transform: uppercase;
         letter-spacing: 0.1em; margin-bottom: 0.3rem;
     }}
+    [data-testid="stVegaLiteChart"],
+    [data-testid="stVegaLiteChart"] > div,
+    [data-testid="stVegaLiteChart"] canvas {{
+        background: transparent !important;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -202,6 +207,7 @@ if finished:
         ),
         color=FILLED,
         height=220,
+        use_container_width=True,
     )
 
     st.markdown('<div class="label">First pickup</div>', unsafe_allow_html=True)
@@ -260,6 +266,7 @@ if evenings_done:
         ),
         color=FILLED,
         height=220,
+        use_container_width=True,
     )
 
     st.markdown('<div class="label">Last putdown</div>', unsafe_allow_html=True)
