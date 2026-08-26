@@ -288,7 +288,11 @@ st.markdown(
 st.markdown(f'<div class="sub">{state}</div>', unsafe_allow_html=True)
 st.markdown(slot_grid(score, MAX_SCORE, 8, SLOT_MINUTES), unsafe_allow_html=True)
 
-finished = days[:-1]
+now = datetime.now(TZ)
+finished = [
+    entry for entry in days
+    if now >= window_end_on(entry["day"])
+]
 if finished:
     average = sum(entry["score"] for entry in finished) / len(finished)
     best = max(entry["score"] for entry in finished)
@@ -323,8 +327,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-live_evening_day = current_evening_day(datetime.now(TZ))
-evenings_done = [entry for entry in days if entry["day"] < live_evening_day]
+now = datetime.now(TZ)
+finished = [e for e in days if now >= window_end_on(e["day"])]
+evenings_done = [e for e in days if now >= evening_end_on(e["day"])]
 
 if evenings_done:
     average = sum(entry["evening_score"] for entry in evenings_done) / len(evenings_done)
