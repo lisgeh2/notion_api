@@ -66,6 +66,9 @@ def load_days():
 def fmt_score(score):
     return f"{score / 10:.1f}"
 
+def make_36to60(score):
+    return score/36*60
+
 
 def live_score_today(days):
     today = days[-1]
@@ -228,15 +231,16 @@ if finished:
 else:
     st.info("No finished days yet. Come back tomorrow.")
 
-st.markdown("---")
+st.divider()
+
 
 evening_score, evening_state = live_evening_score(days)
 
 st.markdown('<div class="label">This evening</div>', unsafe_allow_html=True)
 st.markdown(
-    f'<div class="headline">{fmt_score(evening_score)}'
+    f'<div class="headline">{make_36to60(fmt_score(evening_score))}'
     f'<span style="color:{MUTED};font-size:1.5rem">'
-    f' / {fmt_score(EVENING_MAX_SCORE)}</span></div>',
+    f' / {make_36to60(fmt_score(EVENING_MAX_SCORE))}</span></div>',
     unsafe_allow_html=True,
 )
 st.markdown(f'<div class="sub">{evening_state}</div>', unsafe_allow_html=True)
@@ -253,15 +257,15 @@ if evenings_done:
     average = sum(entry["evening_score"] for entry in evenings_done) / len(evenings_done)
     best = max(entry["evening_score"] for entry in evenings_done)
     left, middle, right = st.columns(3)
-    left.metric("Average", fmt_score(average))
-    middle.metric("Best", fmt_score(best))
+    left.metric("Average", make_36to60(fmt_score(average)))
+    middle.metric("Best", make_36to60(fmt_score(best)))
     right.metric("Streak over 2.7", evening_streak(evenings_done, 27))
 
     st.markdown('<div class="label">Last 30 evenings</div>', unsafe_allow_html=True)
     recent = evenings_done[-30:]
     st.bar_chart(
         pd.DataFrame(
-            {"score": [entry["evening_score"]/10 for entry in recent]},
+            {"score": [make_36to60(entry["evening_score"]/10) for entry in recent]},
             index=[entry["day"].strftime("%d %b") for entry in recent],
         ),
         color=FILLED,
@@ -274,7 +278,7 @@ if evenings_done:
         {
             "Day": entry["day"].strftime("%a %d %b"),
             "Last putdown": entry["last_ping"].strftime("%H:%M") if entry["last_ping"] else "never",
-            "Score": entry["evening_score"]/10,
+            "Score": make_36to60(entry["evening_score"]/10),
         }
         for entry in reversed(evenings_done[-14:])
     ])
