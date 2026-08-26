@@ -184,12 +184,12 @@ def label_with_glyph(text, glyph):
         f'<div class="label">{text}</div></div>'
     )
 
+ICON = os.path.join(os.path.dirname(__file__), "sun.png")
 st.set_page_config(
     page_title="your phone scores",
-    page_icon="sun.png",
+    page_icon=ICON,
     layout="centered",
 )
-
 st.markdown(f"""
 <style>
     .stApp {{ background: {PAPER}; }}
