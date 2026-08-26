@@ -4,6 +4,7 @@
 import os
 import sqlite3
 from datetime import date, datetime, time, timedelta
+import altair as alt
 from zoneinfo import ZoneInfo
 from colors import INK, PAPER, MUTED, FILLED, EMPTY, GRADIENT
 from config import (WINDOW_START, WINDOW_END, SLOT_MINUTES, MAX_SCORE,
@@ -68,6 +69,49 @@ def fmt_score(score):
 
 def make_36to60(score):
     return score/36*60
+
+def score_chart(entries, key, max_score, height=220):
+    """Bar chart where each bar takes its own colour from the gradient."""
+    frame = pd.DataFrame([
+        {
+            "day": entry["day"].strftime("%d %b"),
+            "score": entry[key] / max_score * 6,
+            "colour": gradient_colour(entry[key], max_score),
+        }
+        for entry in entries
+    ])
+    return (
+        alt.Chart(frame)
+        .mark_bar(cornerRadiusTopLeft=2, cornerRadiusTopRight=2, size=14)
+        .encode(
+            x=alt.X(
+                "day:N",
+                sort=None,
+                title=None,
+                axis=alt.Axis(
+                    labelColor=MUTED, labelAngle=-45, labelFontSize=10,
+                    domainColor=EMPTY, tickColor=EMPTY,
+                ),
+            ),
+            y=alt.Y(
+                "score:Q",
+                title=None,
+                scale=alt.Scale(domain=[0, 6]),
+                axis=alt.Axis(
+                    labelColor=MUTED, labelFontSize=10,
+                    grid=False, domain=False, ticks=False,
+                ),
+            ),
+            color=alt.Color("colour:N", scale=None, legend=None),
+            tooltip=[
+                alt.Tooltip("day:N", title="Day"),
+                alt.Tooltip("score:Q", title="Score", format=".1f"),
+            ],
+        )
+        .properties(height=height)
+        .configure_view(fill=None, stroke=None)
+        .configure(background="transparent")
+    )
 
 
 def live_score_today(days):
@@ -174,7 +218,10 @@ st.markdown(f"""
     }}
     [data-testid="stVegaLiteChart"],
     [data-testid="stVegaLiteChart"] > div,
-    [data-testid="stVegaLiteChart"] canvas {{
+    [data-testid="stVegaLiteChart"] canvas,
+    [data-testid="stArrowVegaLiteChart"],
+    [data-testid="stArrowVegaLiteChart"] > div,
+    .vega-embed, .vega-embed canvas, .vega-embed svg {{
         background: transparent !important;
     }}
 </style>
@@ -203,15 +250,7 @@ if finished:
 
     st.markdown('<div class="label">Last 30 days</div>', unsafe_allow_html=True)
     recent = finished[-30:]
-    st.bar_chart(
-        pd.DataFrame(
-            {"score": [entry["score"]/10 for entry in recent]},
-            index=[entry["day"].strftime("%d %b") for entry in recent],
-        ),
-        color=FILLED,
-        height=220,
-        use_container_width=True,
-    )
+    st.altair_chart(score_chart(recent, "score", MAX_SCORE), use_container_width=True)
 
     st.markdown('<div class="label">First pickup</div>', unsafe_allow_html=True)
     table = pd.DataFrame([
@@ -263,13 +302,8 @@ if evenings_done:
 
     st.markdown('<div class="label">Last 30 evenings</div>', unsafe_allow_html=True)
     recent = evenings_done[-30:]
-    st.bar_chart(
-        pd.DataFrame(
-            {"score": [make_36to60(entry["evening_score"]/10) for entry in recent]},
-            index=[entry["day"].strftime("%d %b") for entry in recent],
-        ),
-        color=FILLED,
-        height=220,
+    st.altair_chart(
+        score_chart(recent, "evening_score", EVENING_MAX_SCORE),
         use_container_width=True,
     )
 
