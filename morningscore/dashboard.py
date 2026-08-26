@@ -54,6 +54,8 @@ def load_days():
 def window_start_on(day):
     return datetime.combine(day, WINDOW_START, tzinfo=TZ)
 
+def fmt_score(score):
+    return f"{score / 10:.1f}"
 
 def score_for(first_ping, day):
     if first_ping is None:
@@ -146,8 +148,8 @@ score, state = live_score_today(days)
 
 st.markdown('<div class="label">This morning</div>', unsafe_allow_html=True)
 st.markdown(
-    f'<div class="headline">{score}<span style="color:{MUTED};font-size:1.5rem">'
-    f' / {MAX_SCORE}</span></div>',
+    f'<div class="headline">{fmt_score(score)}<span style="color:{MUTED};font-size:1.5rem">'
+    f' / {fmt_score(MAX_SCORE)}</span></div>',
     unsafe_allow_html=True,
 )
 st.markdown(f'<div class="sub">{state}</div>', unsafe_allow_html=True)
@@ -158,15 +160,15 @@ if finished:
     average = sum(entry["score"] for entry in finished) / len(finished)
     best = max(entry["score"] for entry in finished)
     left, middle, right = st.columns(3)
-    left.metric("Average", f"{average:.0f}")
-    middle.metric("Best", best)
-    right.metric("Streak over 24", current_streak(days, 24))
+    left.metric("Average", fmt_score(average))
+    middle.metric("Best", fmt_score(best))
+    right.metric("Streak over 4.5", current_streak(days, 45))
 
     st.markdown('<div class="label">Last 30 days</div>', unsafe_allow_html=True)
     recent = finished[-30:]
     st.bar_chart(
         pd.DataFrame(
-            {"score": [entry["score"] for entry in recent]},
+            {"score": [entry["score"]/10 for entry in recent]},
             index=[entry["day"].strftime("%d %b") for entry in recent],
         ),
         color=FILLED,
@@ -178,10 +180,15 @@ if finished:
         {
             "Day": entry["day"].strftime("%a %d %b"),
             "First pickup": entry["first_ping"].strftime("%H:%M") if entry["first_ping"] else "never",
-            "Score": entry["score"],
+            "Score": entry["score"]/10,
         }
         for entry in reversed(finished[-14:])
     ])
-    st.dataframe(table, hide_index=True, width="stretch")
+    st.dataframe(
+        table,
+        hide_index=True,
+        width="stretch",
+        column_config={"Score": st.column_config.NumberColumn(format="%.1f")},
+    )
 else:
     st.info("No finished days yet. Come back tomorrow.")
