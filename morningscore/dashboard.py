@@ -140,10 +140,7 @@ st.markdown(f"""
     header, footer, #MainMenu {{ visibility: hidden; }}
     .block-container {{ padding-top: 2.5rem; max-width: 720px; }}
     h1, h2, h3, p, span, div {{ color: {INK}; }}
-    .grid {{
-        display: flex;
-        margin: 0.5rem 0 1.5rem 0;
-    }}
+    
     .grid {{
         display: flex;
         width: 100%;
