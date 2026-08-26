@@ -184,7 +184,7 @@ def label_with_glyph(text, glyph):
         f'<div class="label">{text}</div></div>'
     )
 
-st.set_page_config(page_title="Morning score", layout="centered")
+st.set_page_config(page_title="Morning score", page_icon="🌅", layout="centered")
 
 st.markdown(f"""
 <style>
