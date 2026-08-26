@@ -297,21 +297,6 @@ if finished:
     recent = finished[-30:]
     st.altair_chart(score_chart(recent, "score", MAX_SCORE), use_container_width=True)
 
-    st.markdown('<div class="label">First pickup</div>', unsafe_allow_html=True)
-    table = pd.DataFrame([
-        {
-            "Day": entry["day"].strftime("%a %d %b"),
-            "First pickup": entry["first_ping"].strftime("%H:%M") if entry["first_ping"] else "never",
-            "Score": entry["score"]/10,
-        }
-        for entry in reversed(finished[-14:])
-    ])
-    st.dataframe(
-        table,
-        hide_index=True,
-        width="stretch",
-        column_config={"Score": st.column_config.NumberColumn(format="%.1f")},
-    )
 else:
     st.info("No finished days yet. Come back tomorrow.")
 
