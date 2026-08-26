@@ -178,6 +178,11 @@ def slot_grid(score, max_score, start_hour, slot_minutes, fill_from_end=False):
         )
     return f'<div class="grid">{"".join(blocks)}</div>'
 
+def label_with_glyph(text, glyph):
+    return (
+        f'<div class="label-row"><span class="{glyph}"></span>'
+        f'<div class="label">{text}</div></div>'
+    )
 
 st.set_page_config(page_title="Morning score", layout="centered")
 
@@ -216,6 +221,46 @@ st.markdown(f"""
         color: {MUTED}; font-size: 0.75rem; text-transform: uppercase;
         letter-spacing: 0.1em; margin-bottom: 0.3rem;
     }}
+
+    .label-row {{
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        margin-bottom: 0.3rem;
+    }}
+    .label-row .label {{ margin-bottom: 0; }}
+
+    .sun, .moon {{
+        position: relative;
+        width: 13px;
+        height: 13px;
+        flex: none;
+        border-radius: 50%;
+        opacity: 0.6;
+    }}
+
+    .sun {{
+        background: radial-gradient(circle at 35% 32%, #C98A3C, #A26A34);
+        box-shadow: 0 0 0 3px rgba(201, 138, 60, 0.13),
+                    0 0 9px 2px rgba(201, 138, 60, 0.20);
+    }}
+
+    .moon {{
+        background: {FILLED};
+        box-shadow: 0 0 9px 2px rgba(47, 107, 95, 0.18);
+    }}
+
+    .moon::after {{
+        content: "";
+        position: absolute;
+        top: -2px;
+        left: 3.5px;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: {PAPER};
+    }}
+    
     [data-testid="stVegaLiteChart"],
     [data-testid="stVegaLiteChart"] > div,
     [data-testid="stVegaLiteChart"] canvas,
@@ -230,7 +275,7 @@ st.markdown(f"""
 days = load_days()
 score, state = live_score_today(days)
 
-st.markdown('<div class="label">This morning</div>', unsafe_allow_html=True)
+st.markdown(label_with_glyph("This morning", "sun"), unsafe_allow_html=True)
 st.markdown(
     f'<div class="headline">{fmt_score(score)}<span style="color:{MUTED};font-size:1.5rem">'
     f' / {fmt_score(MAX_SCORE)}</span></div>',
@@ -275,7 +320,7 @@ st.divider()
 
 evening_score, evening_state = live_evening_score(days)
 
-st.markdown('<div class="label">This evening</div>', unsafe_allow_html=True)
+st.markdown(label_with_glyph("This evening", "moon"), unsafe_allow_html=True)
 st.markdown(
     f'<div class="headline">{fmt_score(make_36to60(evening_score))}'
     f'<span style="color:{MUTED};font-size:1.5rem">'
