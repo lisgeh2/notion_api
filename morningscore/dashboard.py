@@ -336,21 +336,5 @@ if evenings_done:
         score_chart(recent, "evening_score", EVENING_MAX_SCORE),
         use_container_width=True,
     )
-
-    st.markdown('<div class="label">Last putdown</div>', unsafe_allow_html=True)
-    table = pd.DataFrame([
-        {
-            "Day": entry["day"].strftime("%a %d %b"),
-            "Last putdown": entry["last_ping"].strftime("%H:%M") if entry["last_ping"] else "never",
-            "Score": make_36to60(entry["evening_score"]/10),
-        }
-        for entry in reversed(evenings_done[-14:])
-    ])
-    st.dataframe(
-        table,
-        hide_index=True,
-        width="stretch",
-        column_config={"Score": st.column_config.NumberColumn(format="%.1f")},
-    )
 else:
     st.info("No finished evenings yet. Come back tomorrow.")
