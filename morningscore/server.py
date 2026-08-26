@@ -7,16 +7,16 @@ import sqlite3
 import sys
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
-from config import (WINDOW_START, WINDOW_END, SLOT_MINUTES, MAX_SCORE,
-                    EVENING_WINDOW_START, EVENING_WINDOW_END,
-                    EVENING_SLOT_MINUTES, EVENING_MAX_SCORE)
-
+from config import MAX_SCORE, EVENING_MAX_SCORE
 from flask import Flask, g, jsonify, request
+
+from scoring import (TZ, window_start_on, window_end_on, in_window, score_for,
+                     evening_start_on, evening_end_on, evening_day_for,
+                     current_evening_day, in_evening_window, evening_score_for)
 
 
 TOKEN = os.environ.get("SCORE_TOKEN", "")
 DB_PATH = os.environ.get("SCORE_DB", "morningscore.db")
-TZ = ZoneInfo(os.environ["SCORE_TZ"]) if "SCORE_TZ" in os.environ else None
 HOST = os.environ.get("SCORE_HOST", "127.0.0.1")
 PORT = int(os.environ.get("SCORE_PORT", "8080"))
 
@@ -25,50 +25,6 @@ app = Flask(__name__)
 
 def now():
     return datetime.now(TZ)
-
-
-def window_start_on(day):
-    return datetime.combine(day, WINDOW_START, tzinfo=TZ)
-
-
-def window_end_on(day):
-    return datetime.combine(day, WINDOW_END, tzinfo=TZ)
-
-def evening_start_on(day):
-    return datetime.combine(day, EVENING_WINDOW_START, tzinfo=TZ)
-
-
-def evening_end_on(day):
-    # window crosses midnight -> the end belongs to the following day
-    extra = 1 if EVENING_WINDOW_END <= EVENING_WINDOW_START else 0
-    return datetime.combine(day + timedelta(days=extra), EVENING_WINDOW_END, tzinfo=TZ)
-
-
-def evening_day_for(moment):
-    """A ping at 00:30 belongs to yesterday's evening."""
-    day = moment.date()
-    return day if evening_start_on(day) <= moment else day - timedelta(days=1)
-
-
-def in_evening_window(moment):
-    day = evening_day_for(moment)
-    return evening_start_on(day) <= moment < evening_end_on(day)
-
-
-def score_for(first_ping, day):
-    if first_ping is None:
-        return MAX_SCORE
-    minutes_survived = (first_ping - window_start_on(day)).total_seconds() / 60
-    return max(0, min(int(minutes_survived // SLOT_MINUTES), MAX_SCORE))
-
-def evening_score_for(last_ping, day):
-    if last_ping is None:
-        return EVENING_MAX_SCORE
-    minutes_early = (evening_end_on(day) - last_ping).total_seconds() / 60
-    return max(0, min(int(minutes_early // EVENING_SLOT_MINUTES), EVENING_MAX_SCORE))
-
-def in_window(moment):
-    return window_start_on(moment.date()) <= moment < window_end_on(moment.date())
 
 
 def db():
@@ -155,11 +111,6 @@ def ping():
                        score=evening_score_for(moment, day)), 200
 
     return jsonify(recorded=False, reason="outside scoring window"), 200
-
-def current_evening_day(moment):
-    """The evening in progress, or tonight's if it hasn't started."""
-    day = evening_day_for(moment)
-    return day if moment < evening_end_on(day) else moment.date()
 
 @app.get("/today")
 def today():
