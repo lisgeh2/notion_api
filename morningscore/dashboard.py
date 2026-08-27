@@ -108,7 +108,7 @@ def score_chart(entries, key, max_score, height=220):
                 alt.Tooltip("score:Q", title="Score", format=".1f"),
             ],
         )
-        .properties(height=height)
+        .properties(height=height, width=alt.Step(22))
         .configure_view(fill=None, stroke=None)
         .configure(background="transparent")
     )
@@ -316,8 +316,8 @@ if finished:
 
     st.markdown('<div class="label">Last 30 days</div>', unsafe_allow_html=True)
     recent = finished[-30:]
-    st.altair_chart(score_chart(recent, "score", MAX_SCORE), use_container_width=True)
-
+    st.altair_chart(score_chart(recent, "score", MAX_SCORE))
+    
 else:
     st.info("No finished days yet. Come back tomorrow.")
 
@@ -356,7 +356,7 @@ if evenings_done:
     recent = evenings_done[-30:]
     st.altair_chart(
         score_chart(recent, "evening_score", EVENING_MAX_SCORE),
-        use_container_width=True,
+    st.altair_chart(score_chart(recent, "evening_score", EVENING_MAX_SCORE))
     )
 else:
     st.info("No finished evenings yet. Come back tomorrow.")
