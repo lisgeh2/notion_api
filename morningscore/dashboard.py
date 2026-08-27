@@ -196,7 +196,11 @@ def label_with_glyph(text, glyph):
         f'<div class="label-row"><span class="{glyph}"></span>'
         f'<div class="label">{text}</div></div>'
     )
-
+def range_label(start, end):
+    return (
+        f'<div class="range"><span>{start.strftime("%H:%M")}</span>'
+        f'<span>{end.strftime("%H:%M")}</span></div>'
+    )
 ICON = os.path.join(os.path.dirname(__file__), "sun.png")
 st.set_page_config(
     page_title="your phone scores",
@@ -238,7 +242,16 @@ st.markdown(f"""
         color: {MUTED}; font-size: 0.75rem; text-transform: uppercase;
         letter-spacing: 0.1em; margin-bottom: 0.3rem;
     }}
-
+    .range {{
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        max-width: 480px;
+        margin: -1.1rem 0 1.5rem 0;
+        color: {MUTED};
+        font-size: 0.7rem;
+        letter-spacing: 0.06em;
+    }}
     .label-row {{
         display: flex;
         align-items: center;
@@ -293,6 +306,7 @@ days = load_days()
 score, state = live_score_today(days)
 
 st.markdown(label_with_glyph("This morning", "sun"), unsafe_allow_html=True)
+
 st.markdown(
     f'<div class="headline">{fmt_score(score)}<span style="color:{MUTED};font-size:1.5rem">'
     f' / {fmt_score(MAX_SCORE)}</span></div>',
@@ -300,6 +314,7 @@ st.markdown(
 )
 st.markdown(f'<div class="sub">{state}</div>', unsafe_allow_html=True)
 st.markdown(slot_grid(score, MAX_SCORE, 8, SLOT_MINUTES), unsafe_allow_html=True)
+st.markdown(range_label(WINDOW_START, WINDOW_END), unsafe_allow_html=True)
 
 now = datetime.now(TZ)
 finished = [
@@ -340,7 +355,7 @@ st.markdown(
               fill_from_end=True),
     unsafe_allow_html=True,
 )
-
+st.markdown(range_label(EVENING_WINDOW_START, EVENING_WINDOW_END), unsafe_allow_html=True)
 now = datetime.now(TZ)
 evenings_done = [e for e in days if now >= evening_end_on(e["day"])]
 
