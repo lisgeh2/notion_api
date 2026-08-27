@@ -125,19 +125,32 @@ def live_score_today(days):
         return MAX_SCORE, "untouched all morning"
     return score_for(now, today["day"]), "still going"
 
-def live_evening_score(days):
+def live_evening_score(days, cutoff_hour=19):
+    """Before cutoff_hour, show last night's finished evening instead of a
+    not-yet-started one."""
     now = datetime.now(TZ)
     day = current_evening_day(now)
+    in_progress = now >= evening_start_on(day)
+
+    if not in_progress and now.hour < cutoff_hour:
+        done = [e for e in days if now >= evening_end_on(e["day"])]
+        if done:
+            entry = done[-1]
+            last_ping = entry["last_ping"]
+            label = f"Last night ({entry['day'].strftime('%a')})"
+            if last_ping is not None:
+                return entry["evening_score"], "phone last on at " + last_ping.strftime("%H:%M"), label
+            return entry["evening_score"], "untouched all evening", label
+
     entry = next((e for e in days if e["day"] == day), None)
     last_ping = entry["last_ping"] if entry else None
     score = evening_score_for(last_ping, day)
 
     if last_ping is not None:
-        return score, "phone last on at " + last_ping.strftime("%H:%M")
-    if now < evening_start_on(day):
-        return score, "evening has not started"
-    return score, "still quiet"
-
+        return score, "phone last on at " + last_ping.strftime("%H:%M"), "This evening"
+    if not in_progress:
+        return score, "evening has not started", "This evening"
+    return score, "still quiet", "This evening"
 
 def evening_streak(entries, threshold):
     streak = 0
@@ -311,9 +324,10 @@ else:
 st.divider()
 
 
-evening_score, evening_state = live_evening_score(days)
+evening_score, evening_state, evening_label = live_evening_score(days)
 
-st.markdown(label_with_glyph("This evening", "moon"), unsafe_allow_html=True)
+st.markdown(label_with_glyph(evening_label, "moon"), unsafe_allow_html=True)
+
 st.markdown(
     f'<div class="headline">{fmt_score(make_36to60(evening_score))}'
     f'<span style="color:{MUTED};font-size:1.5rem">'
@@ -328,7 +342,6 @@ st.markdown(
 )
 
 now = datetime.now(TZ)
-finished = [e for e in days if now >= window_end_on(e["day"])]
 evenings_done = [e for e in days if now >= evening_end_on(e["day"])]
 
 if evenings_done:
