@@ -3,6 +3,7 @@ name: hangout sync
 on:
   schedule:
     - cron: "0 5 * * *"     # 07:00 CEST
+    - cron: "0 8 * * *"     # 07:00 CEST
     - cron: "0 10 * * *"
     - cron: "0 16 * * *"
     - cron: "0 19 * * *"
