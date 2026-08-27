@@ -354,9 +354,6 @@ if evenings_done:
 
     st.markdown('<div class="label">Last 30 evenings</div>', unsafe_allow_html=True)
     recent = evenings_done[-30:]
-    st.altair_chart(
-        score_chart(recent, "evening_score", EVENING_MAX_SCORE),
     st.altair_chart(score_chart(recent, "evening_score", EVENING_MAX_SCORE))
-    )
 else:
     st.info("No finished evenings yet. Come back tomorrow.")
