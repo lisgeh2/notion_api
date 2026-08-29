@@ -2,11 +2,11 @@ name: hangout sync
 
 on:
   schedule:
-    - cron: "0 5 * * *"     # 07:00 CEST
-    - cron: "0 8 * * *"     # 07:00 CEST
-    - cron: "0 10 * * *"
-    - cron: "0 16 * * *"
-    - cron: "0 19 * * *"
+    - cron: "17 5 * * *"
+    - cron: "17 8 * * *"
+    - cron: "17 10 * * *"
+    - cron: "17 16 * * *"
+    - cron: "17 19 * * *"
 
   workflow_dispatch:
 
