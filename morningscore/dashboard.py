@@ -9,13 +9,17 @@ from zoneinfo import ZoneInfo
 from colors import INK, PAPER, MUTED, FILLED, EMPTY, GRADIENT
 from config import (WINDOW_START, WINDOW_END, SLOT_MINUTES, MAX_SCORE,
                     EVENING_WINDOW_START, EVENING_WINDOW_END,
-                    EVENING_SLOT_MINUTES, EVENING_MAX_SCORE)
+                    EVENING_SLOT_MINUTES, EVENING_MAX_SCORE,
+                    DAY_WINDOW_START, DAY_WINDOW_END,
+                    DAY_SLOT_MINUTES, DAY_MAX_SCORE)
+
+from scoring import (TZ, window_start_on, window_end_on, in_window, score_for,
+                     evening_start_on, evening_end_on, evening_day_for,
+                     current_evening_day, in_evening_window, evening_score_for,
+                     day_start_on, day_end_on, day_slots_elapsed, day_score_for)
 
 import pandas as pd
 import streamlit as st
-from scoring import (TZ, window_start_on, window_end_on, in_window, score_for,
-                     evening_start_on, evening_end_on, evening_day_for,
-                     current_evening_day, in_evening_window, evening_score_for)
 
 # Same rules as server.py. If you change them there, change them here.
 
@@ -31,6 +35,7 @@ def read_db():
 
 
 @st.cache_data(ttl=60)
+@st.cache_data(ttl=60)
 def load_days():
     with read_db() as connection:
         pings = {
@@ -44,6 +49,16 @@ def load_days():
             }
         except sqlite3.OperationalError:
             last_pings = {}
+        try:
+            busy = {}
+            for row in connection.execute("SELECT day, slot FROM day_pings"):
+                busy.setdefault(row["day"], set()).add(row["slot"])
+        except sqlite3.OperationalError:
+            busy = {}
+        row = connection.execute(
+            "SELECT value FROM meta WHERE key = 'day_start_day'"
+        ).fetchone()
+        day_tracking_start = date.fromisoformat(row["value"]) if row else None
         row = connection.execute(
             "SELECT value FROM meta WHERE key = 'start_day'"
         ).fetchone()
@@ -54,10 +69,14 @@ def load_days():
     while current <= today:
         first_ping = pings.get(current.isoformat())
         last_ping = last_pings.get(current.isoformat())
+        tracked = day_tracking_start is not None and current >= day_tracking_start
+        busy_slots = busy.get(current.isoformat(), set())
         days.append({
             "day": current,
             "first_ping": first_ping,
             "score": score_for(first_ping, current),
+            "day_slots": busy_slots if tracked else None,
+            "day_score": day_score_for(busy_slots) if tracked else None,
             "last_ping": last_ping,
             "evening_score": evening_score_for(last_ping, current),
         })
@@ -69,6 +88,53 @@ def fmt_score(score):
 
 def make_36to60(score):
     return score/36*60
+
+def to_60(score, max_score):
+    """Put any window's score on the same 0.0-6.0 scale."""
+    return score / max_score * MAX_SCORE
+
+
+def streak_over(entries, key, threshold):
+    streak = 0
+    for entry in reversed(entries):
+        if entry[key] is not None and entry[key] >= threshold:
+            streak += 1
+        else:
+            break
+    return streak
+
+
+def live_day_score(days):
+    """Points are banked as the day goes: quiet blocks can't be taken back."""
+    entry = days[-1]
+    now = datetime.now(TZ)
+    busy = entry["day_slots"]
+    score = day_score_for(busy)
+    elapsed = day_slots_elapsed(now, entry["day"])
+
+    if now < day_start_on(entry["day"]):
+        return score, "day has not started", elapsed
+    if not busy:
+        return score, "untouched all day" if elapsed == DAY_MAX_SCORE else "quiet so far", elapsed
+    return score, f"phone on in {len(busy)} blocks ({len(busy) * DAY_SLOT_MINUTES} min)", elapsed
+
+
+def day_grid(busy_slots, slots_elapsed, score, max_score, start, slot_minutes):
+    """Filled = quiet block, hollow = heartbeats, faded = still to come."""
+    colour = gradient_colour(score, max_score)
+    blocks = []
+    for index in range(max_score):
+        clock = (datetime.combine(date.today(), start)
+                 + timedelta(minutes=index * slot_minutes)).time()
+        if index in busy_slots:
+            style = f"background:{EMPTY}"
+        elif index < slots_elapsed:
+            style = f"background:{colour}"
+        else:
+            style = f"background:{colour};opacity:0.25"
+        blocks.append(f'<div class="slot" style="{style}" title="{clock:%H:%M}"></div>')
+    return f'<div class="grid">{"".join(blocks)}</div>'
+
 
 def score_chart(entries, key, max_score, height=220):
     """Bar chart where each bar takes its own colour from the gradient."""
@@ -291,6 +357,20 @@ st.markdown(f"""
         background: {PAPER};
     }}
     
+    .midday {{
+        background: radial-gradient(circle at 35% 32%, #E0B25C, #C1893C);
+        box-shadow: 0 0 0 3px rgba(224, 178, 92, 0.15),
+                    0 0 12px 3px rgba(224, 178, 92, 0.24);
+    }}
+    .sun, .midday, .moon {{
+        position: relative;
+        width: 13px;
+        height: 13px;
+        flex: none;
+        border-radius: 50%;
+        opacity: 0.6;
+    }}
+    
     [data-testid="stVegaLiteChart"],
     [data-testid="stVegaLiteChart"] > div,
     [data-testid="stVegaLiteChart"] canvas,
@@ -338,6 +418,43 @@ else:
 
 st.divider()
 
+if days[-1]["day_score"] is None:
+    st.info("Daytime tracking starts today. Earlier days have no heartbeat data.")
+else:
+    day_score, day_state, slots_elapsed = live_day_score(days)
+
+    st.markdown(label_with_glyph("Today", "midday"), unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="headline">{fmt_score(to_60(day_score, DAY_MAX_SCORE))}'
+        f'<span style="color:{MUTED};font-size:1.5rem"> / 6.0</span></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(f'<div class="sub">{day_state}</div>', unsafe_allow_html=True)
+    st.markdown(
+        day_grid(days[-1]["day_slots"], slots_elapsed, day_score, DAY_MAX_SCORE,
+                 DAY_WINDOW_START, DAY_SLOT_MINUTES),
+        unsafe_allow_html=True,
+    )
+    st.markdown(range_label(DAY_WINDOW_START, DAY_WINDOW_END), unsafe_allow_html=True)
+
+now = datetime.now(TZ)
+days_done = [e for e in days
+             if e["day_score"] is not None and now >= day_end_on(e["day"])]
+
+if days_done:
+    average = sum(e["day_score"] for e in days_done) / len(days_done)
+    best = max(e["day_score"] for e in days_done)
+    left, middle, right = st.columns(3)
+    left.metric("Average", fmt_score(to_60(average, DAY_MAX_SCORE)))
+    middle.metric("Best", fmt_score(to_60(best, DAY_MAX_SCORE)))
+    right.metric("Streak over 4.5", streak_over(days_done, "day_score", 36))
+
+    st.markdown('<div class="label">Last 30 days</div>', unsafe_allow_html=True)
+    st.altair_chart(score_chart(days_done[-30:], "day_score", DAY_MAX_SCORE))
+else:
+    st.info("No finished days yet. Come back tomorrow.")
+
+st.divider()
 
 evening_score, evening_state, evening_label = live_evening_score(days)
 
@@ -372,3 +489,4 @@ if evenings_done:
     st.altair_chart(score_chart(recent, "evening_score", EVENING_MAX_SCORE))
 else:
     st.info("No finished evenings yet. Come back tomorrow.")
+    

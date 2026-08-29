@@ -7,12 +7,14 @@ import sqlite3
 import sys
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
-from config import MAX_SCORE, EVENING_MAX_SCORE
+from config import MAX_SCORE, EVENING_MAX_SCORE, DAY_MAX_SCORE
 from flask import Flask, g, jsonify, request
 
 from scoring import (TZ, window_start_on, window_end_on, in_window, score_for,
                      evening_start_on, evening_end_on, evening_day_for,
-                     current_evening_day, in_evening_window, evening_score_for)
+                     current_evening_day, in_evening_window, evening_score_for,
+                     day_start_on, day_end_on, in_day_window, day_slot_for,
+                     day_slots_elapsed, day_score_for)
 
 
 TOKEN = os.environ.get("SCORE_TOKEN", "")
@@ -52,11 +54,31 @@ def init_db():
         conn.execute("""CREATE TABLE IF NOT EXISTS evenings (
                     day       TEXT PRIMARY KEY,
                     last_ping TEXT NOT NULL)""")
+        # One row per busy slot. Days before 'day_start_day' were never tracked
+        # and must not be read as perfect days.
+        conn.execute("""CREATE TABLE IF NOT EXISTS day_pings (
+                    day        TEXT NOT NULL,
+                    slot       INTEGER NOT NULL,
+                    first_ping TEXT NOT NULL,
+                    hits       INTEGER NOT NULL DEFAULT 1,
+                    PRIMARY KEY (day, slot))""")
+        conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('day_start_day', ?)",
+                     (datetime.now(TZ).date().isoformat(),))
 
 
 def start_day():
     row = db().execute("SELECT value FROM meta WHERE key = 'start_day'").fetchone()
     return datetime.fromisoformat(row["value"]).date()
+
+
+def day_tracking_start():
+    row = db().execute("SELECT value FROM meta WHERE key = 'day_start_day'").fetchone()
+    return datetime.fromisoformat(row["value"]).date() if row else None
+
+
+def day_tracked(day):
+    start = day_tracking_start()
+    return start is not None and day >= start
 
 
 def save_first_ping(moment):
@@ -87,6 +109,22 @@ def load_last_ping(day):
     return datetime.fromisoformat(row["last_ping"]) if row else None
 
 
+def save_day_ping(moment, day, slot):
+    """Mark the slot as busy. Repeats in the same slot only bump the counter."""
+    db().execute(
+        """INSERT INTO day_pings (day, slot, first_ping) VALUES (?, ?, ?)
+           ON CONFLICT(day, slot) DO UPDATE SET hits = hits + 1""",
+        (day.isoformat(), slot, moment.isoformat()),
+    )
+    db().commit()
+
+
+def load_day_slots(day):
+    rows = db().execute("SELECT slot FROM day_pings WHERE day = ?",
+                        (day.isoformat(),)).fetchall()
+    return {row["slot"] for row in rows}
+
+
 def authorized():
     supplied = request.args.get("token") or request.headers.get("X-Token", "")
     return bool(supplied) and hmac.compare_digest(supplied, TOKEN)
@@ -103,6 +141,14 @@ def ping():
         was_first = save_first_ping(moment)
         return jsonify(window="morning", recorded=was_first,
                        score=score_for(load_first_ping(day), day)), 200
+
+    if in_day_window(moment):
+        day = moment.date()
+        slot = day_slot_for(moment)
+        new_slot = slot not in load_day_slots(day)
+        save_day_ping(moment, day, slot)
+        return jsonify(window="day", recorded=new_slot, slot=slot,
+                       score=day_score_for(load_day_slots(day))), 200
 
     if in_evening_window(moment):
         day = evening_day_for(moment)
@@ -133,8 +179,22 @@ def today():
         state, final = "still going, phone still off", False
 
     reference = first_ping if first_ping else min(moment, window_end_on(day))
-    
-    
+
+    #### day
+
+    busy_slots = load_day_slots(day) if day_tracked(day) else None
+
+    if busy_slots is None:
+        d_state, d_final = "day not tracked", True
+    elif moment < day_start_on(day):
+        d_state, d_final = "day has not started yet", False
+    elif moment < day_end_on(day):
+        d_state = "quiet so far" if not busy_slots else f"{len(busy_slots)} busy blocks so far"
+        d_final = False
+    else:
+        d_state = "perfect day, no heartbeats" if not busy_slots else f"{len(busy_slots)} busy blocks"
+        d_final = True
+
     #### evening
     
     evening_day = current_evening_day(moment)
@@ -156,6 +216,14 @@ def today():
         first_ping=first_ping.strftime("%H:%M") if first_ping else None,
         state=state,
         final=final,
+        daytime={
+            "score": day_score_for(busy_slots) if busy_slots is not None else None,
+            "max_score": DAY_MAX_SCORE,
+            "busy_slots": sorted(busy_slots) if busy_slots is not None else None,
+            "slots_elapsed": day_slots_elapsed(moment, day),
+            "state": d_state,
+            "final": d_final,
+        },
         evening={
             "day": evening_day.isoformat(),
             "score": evening_score_for(last_ping, evening_day),
@@ -182,17 +250,24 @@ def scores():
             break
         first_ping = load_first_ping(day)
         last_ping = load_last_ping(day)
+        busy_slots = load_day_slots(day) if day_tracked(day) else None
         results.append({"day": day.isoformat(),
                         "score": score_for(first_ping, day),
                         "first_ping": first_ping.strftime("%H:%M") if first_ping else None,
+                        "day_score": day_score_for(busy_slots) if busy_slots is not None else None,
+                        "busy_blocks": len(busy_slots) if busy_slots is not None else None,
                         "evening_score": evening_score_for(last_ping, day),
                         "last_ping": last_ping.strftime("%H:%M") if last_ping else None})
     finished = [r for r in results if r["day"] != today_date.isoformat()]
+    day_finished = [r for r in finished if r["day_score"] is not None]
     average = round(sum(r["score"] for r in finished) / len(finished), 1) if finished else None
     evening_average = (round(sum(r["evening_score"] for r in finished) / len(finished), 1)
                        if finished else None)
+    day_average = (round(sum(r["day_score"] for r in day_finished) / len(day_finished), 1)
+                   if day_finished else None)
     return jsonify(days=results, average=average, evening_average=evening_average,
-                   max_score=MAX_SCORE, evening_max_score=EVENING_MAX_SCORE), 200
+                   day_average=day_average, max_score=MAX_SCORE,
+                   evening_max_score=EVENING_MAX_SCORE, day_max_score=DAY_MAX_SCORE), 200
 
 @app.get("/healthz")
 def healthz():
