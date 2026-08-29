@@ -46,6 +46,12 @@ def day_score_for(busy_slots):
     """One point per quiet slot. No heartbeats at all is a full score."""
     return DAY_MAX_SCORE - len(busy_slots)
 
+def day_score_live(busy_slots, moment, day):
+    """Points earned so far: one per completed slot with no heartbeat.
+    Equals day_score_for once the window is over."""
+    elapsed = day_slots_elapsed(moment, day)
+    return elapsed - len([slot for slot in busy_slots if slot < elapsed])
+
 def window_start_on(day):
     return datetime.combine(day, WINDOW_START, tzinfo=TZ)
 

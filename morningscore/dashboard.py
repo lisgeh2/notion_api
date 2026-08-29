@@ -16,7 +16,7 @@ from config import (WINDOW_START, WINDOW_END, SLOT_MINUTES, MAX_SCORE,
 from scoring import (TZ, window_start_on, window_end_on, in_window, score_for,
                      evening_start_on, evening_end_on, evening_day_for,
                      current_evening_day, in_evening_window, evening_score_for,
-                     day_start_on, day_end_on, day_slots_elapsed, day_score_for)
+                     day_start_on, day_end_on, day_slots_elapsed, day_score_for, day_score_live)
 
 import pandas as pd
 import streamlit as st
@@ -109,7 +109,7 @@ def live_day_score(days):
     entry = days[-1]
     now = datetime.now(TZ)
     busy = entry["day_slots"]
-    score = day_score_for(busy)
+    score = day_score_live(busy, now, entry["day"])
     elapsed = day_slots_elapsed(now, entry["day"])
 
     if now < day_start_on(entry["day"]):
